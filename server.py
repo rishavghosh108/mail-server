@@ -1,34 +1,61 @@
-import smtpd
-import asyncore
-import requests
+import asyncio
 
-class CustomSMTPServer(smtpd.SMTPServer):
-    def process_message(self, peer, mailfrom, rcpttos, data):
-        print(f"Receiving message from: {mailfrom}")
-        print(f"Recipients: {rcpttos}")
-        print("Message data:")
-        print(data)
+class SMTPServer:
+    def __init__(self, host='127.0.0.1', port=25):
+        self.host = host
+        self.port = port
 
-        # Make a POST request to the API endpoint to store the received email
-        # api_endpoint = "https://bengalinstiute.online/receive_mail/"
-        # payload = {
-        #     "sender": mailfrom,
-        #     "recipients": rcpttos,
-        #     "message": data
-        # }
+    async def handle_client(self, reader, writer):
+        client_address = writer.get_extra_info('peername')
+        print(f"Connection from {client_address}")
 
-        # try:
-        #     response = requests.post(api_endpoint, json=payload)
-        #     if response.status_code == 200:
-        #         print("Email stored successfully")
-        #     else:
-        #         print("Failed to store email. Status code:", response.status_code)
-        # except Exception as e:
-        #     print("Error storing email:", e)
+        writer.write(b'220 Welcome to Python SMTP server\r\n')
+        await writer.drain()
 
-# Start the custom SMTP server
-server = CustomSMTPServer(('0.0.0.0', 25), None)
-print("SMTP server started")
+        while True:
+            data = await reader.readline()
+            if not data:
+                break
+            command = data.decode().strip()
+            print(f"Received: {command}")
 
-# Run the asyncore event loop
-asyncore.loop()
+            if command.upper() == 'QUIT':
+                writer.write(b'221 Bye\r\n')
+                await writer.drain()
+                break
+            elif command.upper().startswith('HELO'):
+                writer.write(b'250 Hello\r\n')
+                await writer.drain()
+            elif command.upper().startswith('MAIL FROM:'):
+                writer.write(b'250 OK\r\n')
+                await writer.drain()
+            elif command.upper().startswith('RCPT TO:'):
+                writer.write(b'250 OK\r\n')
+                await writer.drain()
+            elif command.upper() == 'DATA':
+                writer.write(b'354 Start mail input; end with <CRLF>.<CRLF>\r\n')
+                await writer.drain()
+                while True:
+                    line = await reader.readline()
+                    if line.strip() == b'.':
+                        break
+                writer.write(b'250 OK\r\n')
+                await writer.drain()
+            else:
+                writer.write(b'500 Error: command not recognized\r\n')
+                await writer.drain()
+
+        print(f"Connection with {client_address} closed")
+        writer.close()
+
+    async def start(self):
+        server = await asyncio.start_server(
+            self.handle_client, self.host, self.port
+        )
+        print(f"SMTP server started on {self.host}:{self.port}")
+        async with server:
+            await server.serve_forever()
+
+if __name__ == "__main__":
+    server = SMTPServer()
+    asyncio.run(server.start())
