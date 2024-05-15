@@ -1,26 +1,34 @@
-import asyncio
-from aiosmtpd.controller import Controller
+import smtpd
+import asyncore
+import requests
 
-class MySMTPServer:
-    async def handle_DATA(self, server, session, envelope):
-        message_data = envelope.content.decode('utf-8')
-        sender = envelope.mail_from
-        recipients = envelope.rcpt_tos
-        print(f"Received email from {sender} to {recipients} with content:")
-        print(message_data)
+class CustomSMTPServer(smtpd.SMTPServer):
+    def process_message(self, peer, mailfrom, rcpttos, data):
+        print(f"Receiving message from: {mailfrom}")
+        print(f"Recipients: {rcpttos}")
+        print("Message data:")
+        print(data)
 
-        # Here, you can further process the received email, save it to a database, etc.
-        # For demonstration purposes, we're just printing the email content.
+        # Make a POST request to the API endpoint to store the received email
+        # api_endpoint = "https://bengalinstiute.online/receive_mail/"
+        # payload = {
+        #     "sender": mailfrom,
+        #     "recipients": rcpttos,
+        #     "message": data
+        # }
 
-        return '250 OK'
+        # try:
+        #     response = requests.post(api_endpoint, json=payload)
+        #     if response.status_code == 200:
+        #         print("Email stored successfully")
+        #     else:
+        #         print("Failed to store email. Status code:", response.status_code)
+        # except Exception as e:
+        #     print("Error storing email:", e)
 
-async def main():
-    controller = Controller(MySMTPServer(), hostname='localhost', port=1025)
-    controller.start()
+# Start the custom SMTP server
+server = CustomSMTPServer(('0.0.0.0', 25), None)
+print("SMTP server started")
 
-    # Keep the server running
-    while True:
-        await asyncio.sleep(3600)  # Sleep for 1 hour to keep the event loop running
-
-# Run the main function to start the SMTP server
-asyncio.run(main())
+# Run the asyncore event loop
+asyncore.loop()
